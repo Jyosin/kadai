@@ -2,13 +2,31 @@ from cgi import test
 import numpy as np
 class Network():
     def __init__(self):
-        self.network = dict()
-        self.network['W1'] = np.ones([2,3], dtype = float)
-        self.network['b1'] = np.array([1.0,1.0,1.0])
-        self.network['W2'] = np.ones([3,2], dtype = float)
-        self.network['b2'] = np.array([1.0,1.0])
-        self.network['W3'] = np.ones([2,1], dtype = float)
-        self.network['b3'] = np.array([1.0])
+        self.nn_architecture = [
+            {"input_dim": 2, "output_dim": 4, "activation": "relu"},
+            {"input_dim": 4, "output_dim": 6, "activation": "relu"},
+            {"input_dim": 6, "output_dim": 6, "activation": "relu"},
+            {"input_dim": 6, "output_dim": 4, "activation": "relu"},
+            {"input_dim": 4, "output_dim": 1, "activation": "sigmoid"},]
+        self.X = [[0,0],[0,1],[1,0],[1,1]]
+        self.Y = [0,1,0,1]
+        
+    def init_layers(self, seed = 99):
+        np.random.seed(seed)
+        number_of_layers = len(self.nn_architecture)
+        params_values = {}
+
+        for idx, layer in enumerate(self.nn_architecture):
+            layer_idx = idx + 1
+            layer_input_size = layer["input_dim"]
+            layer_output_size = layer["output_dim"]
+
+            params_values['W' + str(layer_idx)] = np.random.randn(
+                layer_output_size, layer_input_size) * 0.1
+            params_values['b' + str(layer_idx)] = np.random.randn(
+                layer_output_size, 1) * 0.1
+
+        return params_values
 
     def sigmiod(self):
         return 1/(1+np.exp(-self))
@@ -16,11 +34,11 @@ class Network():
     def relu(self):
         return np.maximum(0,self)
 
-    def sigmoid_backward(dA, self):
+    def sigmoid_backward(self, dA):
         sig = 1/(1+np.exp(-self))
         return dA * sig * (1 - sig)
 
-    def relu_backward(dA, self):
+    def relu_backward(self, dA):
         dZ = np.array(dA, copy = True)
         dZ[self <= 0] = 0;
         return dZ;
@@ -29,24 +47,14 @@ class Network():
         return self
     
 
-    def forword_propagation(self,x):
-        W1,W2,W3 = self.network['W1'],self.network['W2'],self.network['W3']
-        b1,b2,b3 = self.network['b1'],self.network['b2'],self.network['b3']
-        a1 = np.dot(x,W1)+b1
-        z1 = Network.sigmiod(a1)
-        a2 = np.dot(z1,W2)+b2
-        z2 = Network.sigmiod(a2)
-        a3 = np.dot(z2,W3) + b3
-        z3 = Network.relu(a3)
-        y = Network.identity_function(z3)
-        return y
 
-        # self.loss = self.forword_propagation(self,x)
 
-    def get_loss(X, y):
-        # m = X.shape[1]
-        m = X
-        cost = -1 / m * (np.dot(y, np.log(X).T) + np.dot(1 - y, np.log(1 - X).T))
+    def get_loss(self):
+
+        Y_hat = self.forword_loss
+        Y = self.Y
+        m = Y_hat.shape[1]
+        cost = -1 / m * (np.dot(Y, np.log(Y_hat).T) + np.dot(1 - Y, np.log(1 - Y_hat).T))
         return np.squeeze(cost)
 
     def backward_propagation(X, params_values, nn_architecture):
@@ -82,5 +90,5 @@ class Network():
 a = Network()
 x = np.array([1.0,1.0])
 y = a.forword_propagation(x)
-test_loss = a.get_loss([1,1,1])
-print(test_loss)
+# test_loss = a.get_loss(1,y)
+a.test()

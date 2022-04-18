@@ -1,212 +1,192 @@
+from __future__ import print_function
 import numpy as np
+np.random.seed(42)
 
-
-NN_ARCHITECTURE = [
-    {"input_dim": 2, "output_dim": 25, "activation": "relu"},
-    {"input_dim": 25, "output_dim": 50, "activation": "relu"},
-    {"input_dim": 50, "output_dim": 50, "activation": "relu"},
-    {"input_dim": 50, "output_dim": 25, "activation": "relu"},
-    {"input_dim": 25, "output_dim": 1, "activation": "sigmoid"},
-]
-
-def init_layers(nn_architecture, seed = 99):
-    # random seed initiation
-    np.random.seed(seed)
-    # number of layers in our neural network
-    number_of_layers = len(nn_architecture)
-    # parameters storage initiation
-    params_values = {}
+class Layer:
+    def __init__(self):
+        """Here you can initialize layer parameters (if any) and auxiliary stuff."""
+        # A dummy layer does nothing
+        self.weights = np.zeros(shape=(input.shape[1], 10))
+        bias = np.zeros(shape=(10,))
+        pass
     
-    # iteration over network layers
-    for idx, layer in enumerate(nn_architecture):
-        # we number network layers from 1
-        layer_idx = idx + 1
+    def forward(self, input):
+        """
+        Takes input data of shape [batch, input_units], returns output data [batch, 10]
+        """
+        output = np.matmul(input, self.weights) + self.bias
+        return output
+
+class Dense(Layer):
+    def __init__(self, input_units, output_units, learning_rate=0.1):
+        self.learning_rate = learning_rate
         
-        # extracting the number of units in layers
-        layer_input_size = layer["input_dim"]
-        layer_output_size = layer["output_dim"]
+        # initialize weights with small random numbers. We use normal initialization
+        self.weights = np.random.randn(input_units, output_units)*0.01
+        self.biases = np.zeros(output_units)
         
-        # initiating the values of the W matrix
-        # and vector b for subsequent layers
-        params_values['W' + str(layer_idx)] = np.random.randn(
-            layer_output_size, layer_input_size) * 0.1
-        params_values['b' + str(layer_idx)] = np.random.randn(
-            layer_output_size, 1) * 0.1
+    def forward(self,input):
+        return np.matmul(input, self.weights) + self.biases
+      
+    def backward(self,input,grad_output):
+        # compute d f / d x = d f / d dense * d dense / d x
+        # where d dense/ d x = weights transposed
+        grad_input = np.dot(grad_output,np.transpose(self.weights))
+
+        # compute gradient w.r.t. weights and biases
+        grad_weights = np.transpose(np.dot(np.transpose(grad_output),input))
+        grad_biases = np.sum(grad_output, axis = 0)
         
-    return params_values
+        # Here we perform a stochastic gradient descent step. 
+        # Later on, you can try replacing that with something better.
+        self.weights = self.weights - self.learning_rate * grad_weights
+        self.biases = self.biases - self.learning_rate * grad_biases
+        return grad_input
 
-def sigmoid(Z):
-    return 1/(1+np.exp(-Z))
-
-def relu(Z):
-    return np.maximum(0,Z)
-
-def sigmoid_backward(dA, Z):
-    sig = sigmoid(Z)
-    return dA * sig * (1 - sig)
-
-def relu_backward(dA, Z):
-    dZ = np.array(dA, copy = True)
-    dZ[Z <= 0] = 0;
-    return dZ;
-
-def single_layer_forward_propagation(A_prev, W_curr, b_curr, activation="relu"):
-    # calculation of the input value for the activation function
-    Z_curr = np.dot(W_curr, A_prev) + b_curr
+class ReLU(Layer):
+    def __init__(self):
+        """ReLU layer simply applies elementwise rectified linear unit to all inputs"""
+        pass
     
-    # selection of activation function
-    if activation is "relu":
-        activation_func = relu
-    elif activation is "sigmoid":
-        activation_func = sigmoid
-    else:
-        raise Exception('Non-supported activation function')
-        
-    # return of calculated activation A and the intermediate Z matrix
-    return activation_func(Z_curr), Z_curr
+    def forward(self, input):
+        """Apply elementwise ReLU to [batch, input_units] matrix"""
+        return np.maximum(0,input)
 
-def full_forward_propagation(X, params_values, nn_architecture):
-    # creating a temporary memory to store the information needed for a backward step
-    memory = {}
-    # X vector is the activation for layer 0 
-    A_curr = X
+    def backward(self, input, grad_output):
+        """Compute gradient of loss w.r.t. ReLU input"""
+        relu_grad = input > 0
+        return grad_output*relu_grad 
+
+def softmax_crossentropy_with_logits(logits,reference_answers):
+    """Compute crossentropy from logits[batch,n_classes] and ids of correct answers"""
+    logits_for_answers = logits[np.arange(len(logits)),reference_answers]
     
-    # iteration over network layers
-    for idx, layer in enumerate(nn_architecture):
-        # we number network layers from 1
-        layer_idx = idx + 1
-        # transfer the activation from the previous iteration
-        A_prev = A_curr
-        
-        # extraction of the activation function for the current layer
-        activ_function_curr = layer["activation"]
-        # extraction of W for the current layer
-        W_curr = params_values["W" + str(layer_idx)]
-        # extraction of b for the current layer
-        b_curr = params_values["b" + str(layer_idx)]
-        # calculation of activation for the current layer
-        A_curr, Z_curr = single_layer_forward_propagation(A_prev, W_curr, b_curr, activ_function_curr)
-        
-        # saving calculated values in the memory
-        memory["A" + str(idx)] = A_prev
-        memory["Z" + str(layer_idx)] = Z_curr
-       
-    # return of prediction vector and a dictionary containing intermediate values
-    return A_curr, memory
-
-def get_cost_value(Y_hat, Y):
-    # number of examples
-    m = Y_hat.shape[1]
-    # calculation of the cost according to the formula
-    cost = -1 / m * (np.dot(Y, np.log(Y_hat).T) + np.dot(1 - Y, np.log(1 - Y_hat).T))
-    return np.squeeze(cost)
-
-# an auxiliary function that converts probability into class
-def convert_prob_into_class(probs):
-    probs_ = np.copy(probs)
-    probs_[probs_ > 0.5] = 1
-    probs_[probs_ <= 0.5] = 0
-    return probs_
-
-def get_accuracy_value(Y_hat, Y):
-    Y_hat_ = convert_prob_into_class(Y_hat)
-    return (Y_hat_ == Y).all(axis=0).mean()
-
-def single_layer_backward_propagation(dA_curr, W_curr, b_curr, Z_curr, A_prev, activation="relu"):
-    # number of examples
-    m = A_prev.shape[1]
+    xentropy = - logits_for_answers + np.log(np.sum(np.exp(logits),axis=-1))
     
-    # selection of activation function
-    if activation is "relu":
-        backward_activation_func = relu_backward
-    elif activation is "sigmoid":
-        backward_activation_func = sigmoid_backward
-    else:
-        raise Exception('Non-supported activation function')
-    
-    # calculation of the activation function derivative
-    dZ_curr = backward_activation_func(dA_curr, Z_curr)
-    
-    # derivative of the matrix W
-    dW_curr = np.dot(dZ_curr, A_prev.T) / m
-    # derivative of the vector b
-    db_curr = np.sum(dZ_curr, axis=1, keepdims=True) / m
-    # derivative of the matrix A_prev
-    dA_prev = np.dot(W_curr.T, dZ_curr)
+    return xentropy
 
-    return dA_prev, dW_curr, db_curr
-
-def full_backward_propagation(Y_hat, Y, memory, params_values, nn_architecture):
-    grads_values = {}
+def grad_softmax_crossentropy_with_logits(logits,reference_answers):
+    """Compute crossentropy gradient from logits[batch,n_classes] and ids of correct answers"""
+    ones_for_answers = np.zeros_like(logits)
+    ones_for_answers[np.arange(len(logits)),reference_answers] = 1
     
-    # number of examples
-    m = Y.shape[1]
-    # a hack ensuring the same shape of the prediction vector and labels vector
-    Y = Y.reshape(Y_hat.shape)
+    softmax = np.exp(logits) / np.exp(logits).sum(axis=-1,keepdims=True)
     
-    # initiation of gradient descent algorithm
-    dA_prev = - (np.divide(Y, Y_hat) - np.divide(1 - Y, 1 - Y_hat));
+    return (- ones_for_answers + softmax) / logits.shape[0]
+  
+# Import Dataset
+import tensorflow.keras as tk
+
+
+def load_dataset(flatten=False):
+    mnist = tk.datasets.mnist
+    (X_train, y_train), (X_test, y_test) = mnist.load_data()
+
+    # normalize x
+    X_train = X_train.astype(float) / 255.
+    X_test = X_test.astype(float) / 255.
+
+    # we reserve the last 10000 training examples for validation
+    X_train, X_val = X_train[:-10000], X_train[-10000:]
+    y_train, y_val = y_train[:-10000], y_train[-10000:]
+
+    if flatten:
+        X_train = X_train.reshape([X_train.shape[0], -1])
+        X_val = X_val.reshape([X_val.shape[0], -1])
+        X_test = X_test.reshape([X_test.shape[0], -1])
+
+    return X_train, y_train, X_val, y_val, X_test, y_test
+  
+import matplotlib.pyplot as plt
+X_train, y_train, X_val, y_val, X_test, y_test = load_dataset(flatten=True)
+
+plt.figure(figsize=[6,6])
+for i in range(4):
+    plt.subplot(2,2,i+1)
+    plt.title("Label: %i"%y_train[i])
+    plt.imshow(X_train[i].reshape([28,28]),cmap='gray');
     
-    for layer_idx_prev, layer in reversed(list(enumerate(nn_architecture))):
-        # we number network layers from 1
-        layer_idx_curr = layer_idx_prev + 1
-        # extraction of the activation function for the current layer
-        activ_function_curr = layer["activation"]
+network = []
+network.append(Dense(X_train.shape[1],100))
+network.append(ReLU())
+network.append(Dense(100,200))
+network.append(ReLU())
+network.append(Dense(200,10))
+
+def forward(network, X):
+    """
+    Compute activations of all network layers by applying them sequentially.
+    Return a list of activations for each layer. 
+    Make sure last activation corresponds to network logits.
+    """
+    activations = []
+    input = X
+    for i in range(len(network)):
+        activations.append(network[i].forward(X))
+        X = network[i].forward(X)
         
-        dA_curr = dA_prev
-        
-        A_prev = memory["A" + str(layer_idx_prev)]
-        Z_curr = memory["Z" + str(layer_idx_curr)]
-        
-        W_curr = params_values["W" + str(layer_idx_curr)]
-        b_curr = params_values["b" + str(layer_idx_curr)]
-        
-        dA_prev, dW_curr, db_curr = single_layer_backward_propagation(
-            dA_curr, W_curr, b_curr, Z_curr, A_prev, activ_function_curr)
-        
-        grads_values["dW" + str(layer_idx_curr)] = dW_curr
-        grads_values["db" + str(layer_idx_curr)] = db_curr
+    assert len(activations) == len(network)
+    return activations
+
+def predict(network,X):
+    """
+    Compute network predictions.
+    """
+    logits = forward(network,X)[-1]
+    return logits.argmax(axis=-1)
+
+def train(network,X,y):
+    """
+    Train your network on a given batch of X and y.
+    You first need to run forward to get all layer activations.
+    Then you can run layer.backward going from last to first layer.
+    After you called backward for all layers, all Dense layers have already made one gradient step.
+    """
     
-    return grads_values
-
-def update(params_values, grads_values, nn_architecture, learning_rate):
-
-    # iteration over network layers
-    for layer_idx, layer in enumerate(nn_architecture, 1):
-        params_values["W" + str(layer_idx)] -= learning_rate * grads_values["dW" + str(layer_idx)]        
-        params_values["b" + str(layer_idx)] -= learning_rate * grads_values["db" + str(layer_idx)]
-
-    return params_values;
-
-def train(X, Y, nn_architecture, epochs, learning_rate, verbose=False, callback=None):
-    # initiation of neural net parameters
-    params_values = init_layers(nn_architecture, 2)
-    # initiation of lists storing the history 
-    # of metrics calculated during the learning process 
-    cost_history = []
-    accuracy_history = []
+    # Get the layer activations
+    layer_activations = forward(network,X)
+    logits = layer_activations[-1]
     
-    # performing calculations for subsequent iterations
-    for i in range(epochs):
-        # step forward
-        Y_hat, cashe = full_forward_propagation(X, params_values, nn_architecture)
+    # Compute the loss and the initial gradient
+    loss = softmax_crossentropy_with_logits(logits,y)
+    loss_grad = grad_softmax_crossentropy_with_logits(logits,y)
+    
+    for i in range(1, len(network)):
+        loss_grad = network[len(network) - i].backward(layer_activations[len(network) - i - 1], loss_grad)
+    
+    return np.mean(loss)
+  
+from tqdm import trange
+def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
+    assert len(inputs) == len(targets)
+    if shuffle:
+        indices = np.random.permutation(len(inputs))
+    for start_idx in trange(0, len(inputs) - batchsize + 1, batchsize):
+        if shuffle:
+            excerpt = indices[start_idx:start_idx + batchsize]
+        else:
+            excerpt = slice(start_idx, start_idx + batchsize)
+        yield inputs[excerpt], targets[excerpt]
         
-        # calculating metrics and saving them in history
-        cost = get_cost_value(Y_hat, Y)
-        cost_history.append(cost)
-        accuracy = get_accuracy_value(Y_hat, Y)
-        accuracy_history.append(accuracy)
-        
-        # step backward - calculating gradient
-        grads_values = full_backward_propagation(Y_hat, Y, cashe, params_values, nn_architecture)
-        # updating model state
-        params_values = update(params_values, grads_values, nn_architecture, learning_rate)
-        
-        if(i % 50 == 0):
-            if(verbose):
-                print("Iteration: {:05} - cost: {:.5f} - accuracy: {:.5f}".format(i, cost, accuracy))
-            if(callback is not None):
-                callback(i, params_values)
-            
-    return params_values
+train_log = []
+val_log = []
 
+for epoch in range(25):
+
+    for x_batch,y_batch in iterate_minibatches(X_train,y_train,batchsize=32,shuffle=True):
+        train(network,x_batch,y_batch)
+    
+    train_log.append(np.mean(predict(network,X_train)==y_train))
+    val_log.append(np.mean(predict(network,X_val)==y_val))
+    
+    # clear_output()
+    print("Epoch",epoch)
+    print("Train accuracy:",train_log[-1])
+    print("Val accuracy:",val_log[-1])
+    plt.plot(train_log,label='train accuracy')
+    plt.plot(val_log,label='val accuracy')
+    plt.legend(loc='best')
+    plt.grid()
+    plt.show()
+
+# def dataload():
