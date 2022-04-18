@@ -1,3 +1,4 @@
+from cgi import test
 import numpy as np
 class Network():
     def __init__(self):
@@ -40,11 +41,12 @@ class Network():
         y = Network.identity_function(z3)
         return y
 
-    self.loss = self.forword_propagation(self,x)
+        # self.loss = self.forword_propagation(self,x)
 
-    def get_loss(forword_propagation(self,x),y):
-        m = self.shape[1]
-        cost = -1 / m * (np.dot(y, np.log(self).T) + np.dot(1 - y, np.log(1 - self).T))
+    def get_loss(X, y):
+        # m = X.shape[1]
+        m = X
+        cost = -1 / m * (np.dot(y, np.log(X).T) + np.dot(1 - y, np.log(1 - X).T))
         return np.squeeze(cost)
 
     def backward_propagation(X, params_values, nn_architecture):
@@ -79,6 +81,6 @@ class Network():
 
 a = Network()
 x = np.array([1.0,1.0])
-y = a.forword(x)
-y = 
-print(y)
+y = a.forword_propagation(x)
+test_loss = a.get_loss([1,1,1])
+print(test_loss)
