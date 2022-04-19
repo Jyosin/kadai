@@ -18,7 +18,7 @@ class Layer:
         return output
 
 class Dense(Layer):
-    def __init__(self, input_units, output_units, learning_rate=0.1):
+    def __init__(self, input_units, output_units, learning_rate=0.005):
         self.learning_rate = learning_rate
         
         # initialize weights with small random numbers. We use normal initialization
@@ -78,13 +78,54 @@ def grad_softmax_crossentropy_with_logits(logits,reference_answers):
 import tensorflow.keras as tk
 
 
+def readdata():
+
+
+    X_train = np.ones([60000,28,28])
+    y_train = np.ones(60000,int)
+    X_test = np.ones([10000,28,28])
+    y_test = np.ones(10000,int)
+
+    data_2class = np.loadtxt('/Users/wangruqin/VScode/kadai1/spiral_data/2class.txt',dtype=np.float32)
+
+    np.random.shuffle(data_2class)
+
+    for i in range (60000):
+        if i <= 50000:
+            aa = int((data_2class[i%1430][0]+0.15468)*13.1369)
+            bb = int((data_2class[i%1430][1]+0.15468)*13.1369)
+            X_train[i][aa][bb] = 255
+            y_train[i] = data_2class[i%1430][2]
+        # np.random.shuffle(data_2class)
+        else:
+            aa = int((data_2class[1430+i%286][0]+0.15468)*13.1369)
+            bb = int((data_2class[1430+i%286][1]+0.15468)*13.1369)
+            X_train[i][aa][bb] = 255
+            y_train[i] = data_2class[1430+i%286][2]
+
+    for j in range (10000):
+
+        aa = int((data_2class[1716+j%286][0]+0.15468)*13.1369)
+        bb = int((data_2class[1716+j%286][1]+0.15468)*13.1369)
+        X_test[j][aa][bb] = 255
+        y_test[j] = data_2class[1430+j%286][2]
+        # np.random.shuffle(data_2class)
+
+    # y_train = y_train.astype(int)
+
+
+
+    return X_train, y_train, X_test, y_test
+
 def load_dataset(flatten=False):
     mnist = tk.datasets.mnist
-    (X_train, y_train), (X_test, y_test) = mnist.load_data()
+    # (X_train, y_train), (X_test, y_test) = mnist.load_data()
+
+    X_train, y_train, X_test, y_test = readdata()
 
     # normalize x
-    X_train = X_train.astype(float) / 255.
-    X_test = X_test.astype(float) / 255.
+    # X_train = X_train.astype(float) / 255.
+    # X_test = X_test.astype(float) / 255.
 
     # we reserve the last 10000 training examples for validation
     X_train, X_val = X_train[:-10000], X_train[-10000:]
@@ -135,6 +176,8 @@ def predict(network,X):
     logits = forward(network,X)[-1]
     return logits.argmax(axis=-1)
 
+
+
 def train(network,X,y):
     """
     Train your network on a given batch of X and y.
@@ -170,23 +213,32 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
         
 train_log = []
 val_log = []
+train_loss_list = []
+val_loss_list = []
 
 for epoch in range(25):
 
     for x_batch,y_batch in iterate_minibatches(X_train,y_train,batchsize=32,shuffle=True):
-        train(network,x_batch,y_batch)
-    
+        loss = train(network,x_batch,y_batch)
+
+    train_loss_list.append(loss)
+    val_loss_list.append(train(network,X_val,y_val))
     train_log.append(np.mean(predict(network,X_train)==y_train))
     val_log.append(np.mean(predict(network,X_val)==y_val))
     
     # clear_output()
-    print("Epoch",epoch)
-    print("Train accuracy:",train_log[-1])
-    print("Val accuracy:",val_log[-1])
+    # print("Epoch",epoch)
+    # print("Train accuracy:",train_log[-1])
+    # print("Val accuracy:",val_log[-1])
     plt.plot(train_log,label='train accuracy')
     plt.plot(val_log,label='val accuracy')
+    # plt.plot(train_loss_list,label='train_loss')
+    # plt.plot(val_loss_list,label='val_loss')
+
     plt.legend(loc='best')
     plt.grid()
     plt.show()
+
+
 
 # def dataload():
