@@ -74,8 +74,7 @@ def grad_softmax_crossentropy_with_logits(logits,reference_answers):
     
     return (- ones_for_answers + softmax) / logits.shape[0]
   
-# Import Dataset
-import tensorflow.keras as tk
+# Import Datasetd
 
 
 def readdata():
