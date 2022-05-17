@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -12,6 +12,22 @@ def mnistset():
     x_train,x_test = x_train/255.0, x_test/255.0
     print(np.shape(x_train))
     print(np.shape(y_train))
+    return x_train,y_train,x_test,y_test
+
+def getkmnist():
+
+    x_test_data = np.load("/Users/wangruqin/VScode/kadai1/kadai2/KMNIST/kmnist-test-imgs.npz") 
+    x_test = x_test_data['arr_0']
+    
+    y_test_data = np.load("/Users/wangruqin/VScode/kadai1/kadai2/KMNIST/kmnist-test-labels.npz") 
+    y_test = y_test_data['arr_0']
+
+    x_train_data = np.load("/Users/wangruqin/VScode/kadai1/kadai2/KMNIST/kmnist-train-imgs.npz") 
+    x_train = x_train_data['arr_0']
+
+    y_train_data = np.load("/Users/wangruqin/VScode/kadai1/kadai2/KMNIST/kmnist-train-labels.npz") 
+    y_train = y_train_data['arr_0']
+
     return x_train,y_train,x_test,y_test
 
 def FCmodel():
@@ -35,13 +51,13 @@ def Train():
     model.compile(loss = 'sparse_categorical_crossentropy',
                   optimizer = keras.optimizers.Adam(0.01),
                   metrics = ['accuracy'])
-    x_train,y_train,_,_ = mnistset()
+    x_train,y_train,x_test,y_test = getkmnist()
 
     callbacks = [keras.callbacks.TensorBoard(log_dir="./logs")]
-# //回调
-    dataset = tf.data.Dataset.from_tensor_slices(((x_train,y_train)))
+    dataset = tf.data.Dataset.from_tensor_slices(((x_train,y_train,x_test,y_test)))
     dataset = dataset.batch(32)
-    model.fit(dataset,epochs = 100,callbacks=callbacks)
+
+
 
 
 class My_Dense(layers.Layer):
@@ -61,12 +77,19 @@ class My_Dense(layers.Layer):
 def My_model():
     Inputs = keras.Input(shape = (28,28),name = 'FC_input')
     x = layers.Flatten()(Inputs)
-    x = My_Dense(784,units=64)(x)
+    x = My_Dense(784,units=1024)(x)
+    x = keras.activations.relu(x)
 
+    x = My_Dense(1024,units=1024)(x)
     x = keras.activations.relu(x)
-    x = My_Dense(64,units=32)(x)
+
+    x = My_Dense(1024,units=1024)(x)
     x = keras.activations.relu(x)
-    x = My_Dense(32,units=10)(x)
+        
+    x = My_Dense(1024,units=1024)(x)
+    x = keras.activations.relu(x)
+
+    x = My_Dense(1024,units=10)(x)
     Outputs = keras.activations.softmax(x)
 
     model = keras.Model(Inputs,Outputs)
@@ -75,15 +98,45 @@ def My_model():
     return model
 def My_Train(): 
     model = My_model()
+    train_loss = []
+    train_acc = []
+    test_loss = []
+    train_loss = []
     model.compile(loss = 'sparse_categorical_crossentropy',
-                  optimizer = keras.optimizers.Adam(0.01),
+                  optimizer = keras.optimizers.Adam(0.001),
                   metrics = ['accuracy'])
-    x_train,y_train,_,_ = mnistset()
+    x_train,y_train,x_test,y_test = getkmnist()
     callbacks = [keras.callbacks.TensorBoard(log_dir="./logs")]
 
     dataset = tf.data.Dataset.from_tensor_slices(((x_train,y_train)))
-    dataset = dataset.batch(32)
-    model.fit(dataset,epochs = 10,callbacks=callbacks)
+    dataset = dataset.shuffle(60000).batch(32)
+
+    test_dataset = tf.data.Dataset.from_tensor_slices(((x_test,y_test)))
+    test_dataset = test_dataset.shuffle(10000).batch(32)
+    # model.fit(dataset,epochs = 10,callbacks=callbacks)
+    history1 = model.fit(dataset,validation_data = test_dataset,epochs = 25,callbacks=callbacks)
+    train_loss = history1.history['loss']
+    train_acc = history1.history['accuracy']
+    test_loss = history1.history['val_loss']
+    test_acc = history1.history['val_accuracy']
+    plt.plot(train_loss,label='train loss')
+    plt.plot(test_loss,label='test loss')
+    # plt.plot(train_acc,label='train_loss')
+    # plt.plot(test_acc,label='test_loss')
+
+    plt.legend(loc='best')
+    plt.grid()
+    plt.show()
+    
+    plt.plot(train_acc,label='train_acc')
+    plt.plot(test_acc,label='test_acc')
+
+    plt.legend(loc='best')
+    plt.grid()
+    plt.show()
+
+    
 
 if __name__ == "__main__":
     My_Train()
+    # getkmnist()
