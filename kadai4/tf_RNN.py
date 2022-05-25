@@ -1,146 +1,226 @@
-import numpy as np
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-import matplotlib.pyplot as plt
+from __future__ import unicode_literals, print_function, division
+from io import open
+import glob
+import os
+import io
+import os
+import re
+import shutil
+import string
+import random
+from random import shuffle
 
-model = keras.Sequential()
-# Add an Embedding layer expecting input vocab of size 1000, and
-# output embedding dimension of size 64.
-model.add(layers.Embedding(input_dim=1000, output_dim=64))
+def findFiles(path): return glob.glob(path)
 
-# Add a LSTM layer with 128 internal units.
-model.add(layers.LSTM(128))
+print(findFiles('kadai4/data/names/*.txt'))
 
-# Add a Dense layer with 10 units.
-model.add(layers.Dense(10))
+import unicodedata
+import string
 
-model.summary()
+all_letters = string.ascii_letters + " .,;'"
+n_letters = len(all_letters)
 
-model = keras.Sequential()
-model.add(layers.Embedding(input_dim=1000, output_dim=64))
-
-# The output of GRU will be a 3D tensor of shape (batch_size, timesteps, 256)
-model.add(layers.GRU(256, return_sequences=True))
-
-# The output of SimpleRNN will be a 2D tensor of shape (batch_size, 128)
-model.add(layers.SimpleRNN(128))
-
-model.add(layers.Dense(10))
-
-model.summary()
-
-encoder_vocab = 1000
-decoder_vocab = 2000
-
-encoder_input = layers.Input(shape=(None,))
-encoder_embedded = layers.Embedding(input_dim=encoder_vocab, output_dim=64)(
-    encoder_input
-)
-
-# Return states in addition to output
-output, state_h, state_c = layers.LSTM(64, return_state=True, name="encoder")(
-    encoder_embedded
-)
-encoder_state = [state_h, state_c]
-
-decoder_input = layers.Input(shape=(None,))
-decoder_embedded = layers.Embedding(input_dim=decoder_vocab, output_dim=64)(
-    decoder_input
-)
-
-# Pass the 2 states to a new LSTM layer, as initial state
-decoder_output = layers.LSTM(64, name="decoder")(
-    decoder_embedded, initial_state=encoder_state
-)
-output = layers.Dense(10)(decoder_output)
-
-model = keras.Model([encoder_input, decoder_input], output)
-model.summary()
-
-batch_size = 64
-# Each MNIST image batch is a tensor of shape (batch_size, 28, 28).
-# Each input sequence will be of size (28, 28) (height is treated like time).
-input_dim = 28
-
-units = 64
-output_size = 10  # labels are from 0 to 9
-
-# Build the RNN model
-def build_model(allow_cudnn_kernel=True):
-    # CuDNN is only available at the layer level, and not at the cell level.
-    # This means `LSTM(units)` will use the CuDNN kernel,
-    # while RNN(LSTMCell(units)) will run on non-CuDNN kernel.
-    if allow_cudnn_kernel:
-        # The LSTM layer with default options uses CuDNN.
-        lstm_layer = keras.layers.LSTM(units, input_shape=(None, input_dim))
-    else:
-        # Wrapping a LSTMCell in a RNN layer will not use CuDNN.
-        lstm_layer = keras.layers.RNN(
-            keras.layers.LSTMCell(units), input_shape=(None, input_dim)
-        )
-    model = keras.models.Sequential(
-        [
-            lstm_layer,
-            keras.layers.BatchNormalization(),
-            keras.layers.Dense(output_size),
-        ]
+# Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
+def unicodeToAscii(s):
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', s)
+        if unicodedata.category(c) != 'Mn'
+        and c in all_letters
     )
-    return model
 
-def getkmnist():
+print(unicodeToAscii('Ślusàrski'))
 
-    x_test_data = np.load("/Users/wangruqin/VScode/kadai1/kadai2/KMNIST/kmnist-test-imgs.npz") 
-    x_test = x_test_data['arr_0']
+# Build the category_lines dictionary, a list of names per language
+category_lines = {}
+all_categories = []
+
+# Read a file and split into lines
+def readLines(filename):
+    lines = open(filename, encoding='utf-8').read().strip().split('\n')
+    return [unicodeToAscii(line) for line in lines]
+
+for filename in findFiles('kadai4/data/names/*.txt'):
+    category = os.path.splitext(os.path.basename(filename))[0]
+    all_categories.append(category)
+    lines = readLines(filename)
+    category_lines[category] = lines
+
+n_categories = len(all_categories)
+
+
+import torch
+import  tensorflow as tf
+import numpy as np
+
+# Find letter index from all_letters, e.g. "a" = 0
+def letterToIndex(letter):
+    return all_letters.find(letter)
+
+# Just for demonstration, turn a letter into a <1 x n_letters> Tensor
+def letterToTensor(letter):
+    tensor = torch.zeros(1, n_letters)
+    tensor[0][letterToIndex(letter)] = 1
+    return tensor
+
+# Turn a line into a <line_length x 1 x n_letters>,
+# or an array of one-hot letter vectors
+def lineToTensor(line):
+    tensor = torch.zeros(len(line), 1, n_letters)
+    for li, letter in enumerate(line):
+        tensor[li][0][letterToIndex(letter)] = 1
+    return tensor
+
+
+import random
+
+
+
+def relable():
+    data = []
+    label = []
+    fullset = []
+    for k,v in category_lines.items():
+        for line in v :
+            data.append(line)
+            idx = all_categories.index(k)
+            label.append(idx)
+    fullset.append(data)
+    fullset.append(label)
+    return fullset
+
     
-    y_test_data = np.load("/Users/wangruqin/VScode/kadai1/kadai2/KMNIST/kmnist-test-labels.npz") 
-    y_test = y_test_data['arr_0']
-
-    x_train_data = np.load("/Users/wangruqin/VScode/kadai1/kadai2/KMNIST/kmnist-train-imgs.npz") 
-    x_train = x_train_data['arr_0']
-
-    y_train_data = np.load("/Users/wangruqin/VScode/kadai1/kadai2/KMNIST/kmnist-train-labels.npz") 
-    y_train = y_train_data['arr_0']
+def setdata():
+    fullst = relable()
+    x_train,y_train,x_test,y_test=[],[],[],[]
+    n = [[k] for k in range(len(fullst[0]))]
+    shuffle(n)
+    for i in range(len(fullst[0])):            
+        flag = n[i][0]
+        if i < 16000:
+            x_train.append(lineToTensor(fullst[0][flag]))
+            y_train.append(torch.tensor(fullst[1][flag]))
+        else :
+            x_test.append(lineToTensor(fullst[0][flag]))
+            y_test.append(torch.tensor(fullst[1][flag]))
 
     return x_train,y_train,x_test,y_test
 
-x_train, y_train, x_test, y_test = getkmnist()
-x_train, x_test = x_train / 255.0, x_test / 255.0
-sample, sample_label = x_train[0], y_train[0]
+def randomChoice(l):
+    return l[random.randint(0, len(l) - 1)]
 
-model = build_model(allow_cudnn_kernel=True)
+def randomTrainingExample():
+    category = randomChoice(all_categories)
+    line = randomChoice(category_lines[category])
+    category_tensor = torch.tensor([all_categories.index(category)], dtype=torch.long)
+    line_tensor = lineToTensor(line)
+    return category, line, category_tensor, line_tensor
+    
+import torch.nn as nn
 
-model.compile(
-    loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    optimizer="sgd",
-    metrics=["accuracy"],
-)
+class RNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(RNN, self).__init__()
 
-train_loss = []
-train_acc = []
-test_loss = []
-train_loss = []
+        self.hidden_size = hidden_size
 
-history1 = model.fit(x_train, y_train, validation_data=(x_test, y_test), batch_size=batch_size, epochs=25)
-train_loss = history1.history['loss']
-train_acc = history1.history['accuracy']
-test_loss = history1.history['val_loss']
-test_acc = history1.history['val_accuracy']
-plt.plot(train_loss,label='train loss')
-plt.plot(test_loss,label='test loss')
-# plt.plot(train_acc,label='train_loss')
-# plt.plot(test_acc,label='test_loss')
+        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
+        self.i2o = nn.Linear(input_size + hidden_size, output_size)
+        self.softmax = nn.LogSoftmax(dim=1)
 
-plt.legend(loc='best')
-plt.grid()
-plt.show()
+    def forward(self, input, hidden):
+        combined = torch.cat((input, hidden), 1)
+        hidden = self.i2h(combined)
+        output = self.i2o(combined)
+        output = self.softmax(output)
+        return output, hidden
 
-plt.plot(train_acc,label='train_acc')
-plt.plot(test_acc,label='test_acc')
+    def initHidden(self):
+        return torch.zeros(1, self.hidden_size)
 
-plt.legend(loc='best')
-plt.grid()
-plt.show()
+n_hidden = 128
+rnn = RNN(n_letters, n_hidden, n_categories)
+
+input = letterToTensor('A')
+hidden = torch.zeros(1, n_hidden)
+
+output, next_hidden = rnn(input, hidden)
+
+input = lineToTensor('Albert')
+hidden = torch.zeros(1, n_hidden)
+
+output, next_hidden = rnn(input[0], hidden)
+print(output)
+
+def categoryFromOutput(output):
+    top_n, top_i = output.topk(1)
+    category_i = top_i[0].item()
+    return all_categories[category_i], category_i
+
+print(categoryFromOutput(output))
+
+def categoryFromOutput(output):
+    top_n, top_i = output.topk(1)
+    category_i = top_i[0].item()
+    return all_categories[category_i], category_i
+
+print(categoryFromOutput(output))
+
+criterion = nn.NLLLoss()
+
+learning_rate = 0.005 # If you set this too high, it might explode. If too low, it might not learn
+
+def train(category_tensor, line_tensor):
+    hidden = rnn.initHidden()
+
+    rnn.zero_grad()
+
+    for i in range(line_tensor.size()[0]):
+        output, hidden = rnn(line_tensor[i], hidden)
+
+    loss = criterion(output, category_tensor)
+    loss.backward()
+
+    # Add parameters' gradients to their values, multiplied by learning rate
+    for p in rnn.parameters():
+        p.data.add_(p.grad.data, alpha=-learning_rate)
+
+    return output, loss.item()
+
+import time
+import math
+
+n_iters = 100000
+print_every = 5000
+plot_every = 1000
 
 
+# Keep track of losses for plotting
+current_loss = 0
+all_losses = []
+
+def timeSince(since):
+    now = time.time()
+    s = now - since
+    m = math.floor(s / 60)
+    s -= m * 60
+    return '%dm %ds' % (m, s)
+
+start = time.time()
+
+for iter in range(1, n_iters + 1):
+    category, line, category_tensor, line_tensor = randomTrainingExample()
+    x_train,y_train,x_test,y_test = setdata()
+    output, loss = train(y_train, x_train)
+    current_loss += loss
+
+    # Print iter number, loss, name and guess
+    if iter % print_every == 0:
+        guess, guess_i = categoryFromOutput(output)
+        correct = '✓' if guess == category else '✗ (%s)' % category
+        print('%d %d%% (%s) %.4f %s / %s %s' % (iter, iter / n_iters * 100, timeSince(start), loss, line, guess, correct))
+
+    # Add current loss avg to list of losses
+    if iter % plot_every == 0:
+        all_losses.append(current_loss / plot_every)
+        current_loss = 0
 
